@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/router'
 import { supabase } from '../lib/supabaseClient'
+import { PostgrestError } from '@supabase/supabase-js' // Importar el tipo de error
 
 // Define tipos explícitos para 'data' y 'error'
 type User = {
@@ -20,7 +21,7 @@ export default function Login() {
 
     try {
       let data: User | null = null
-      let error: any = null
+      let error: PostgrestError | null = null // Cambiar a PostgrestError
 
       // Si el identifier es un DNI (suponiendo que es numérico), buscamos en la tabla 'usuarios'
       if (!isNaN(Number(identifier))) {
