@@ -39,7 +39,7 @@ export default function Employee() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [router, supabase]); // Agregado supabase como dependencia
+  }, []); // Agregado supabase como dependencia
 
   const registrarEvento = async (tipoEvento: string) => {
     if (!userId || !turno) {
@@ -64,7 +64,7 @@ export default function Employee() {
         throw errorSelect;
       }
 
-      let updateData: { usuario_id: string; fecha: string; ingreso?: Date | null; egreso?: Date | null } = {
+      const updateData: { usuario_id: string; fecha: string; ingreso?: Date | null; egreso?: Date | null } = {
         usuario_id: userId,
         fecha: fechaActual
       };

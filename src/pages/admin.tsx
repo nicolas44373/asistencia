@@ -110,7 +110,7 @@ const AttendanceStats = ({ records }: { records: AttendanceRecord[] }) => {
 export default function Admin() {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([])
   const [monthlyRecords, setMonthlyRecords] = useState<MonthlyAttendanceRecord[]>([])
-  const [loading, setLoading] = useState(true)
+  const [, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
   const router = useRouter()
