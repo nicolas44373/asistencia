@@ -11,13 +11,23 @@ export default function Home() {
 
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user }, error } = await supabase.auth.getUser()
+      if (error) {
+        console.error('Error getting user:', error.message)
+        return
+      }
+      
       if (user) {
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('role')
           .eq('id', user.id)
           .single()
+
+        if (profileError) {
+          console.error('Error getting profile:', profileError.message)
+          return
+        }
 
         if (profile?.role === 'admin') {
           router.push('/admin')
@@ -28,7 +38,7 @@ export default function Home() {
     }
 
     checkUser()
-  }, [])
+  }, [router, supabase])
 
   return (
     <>

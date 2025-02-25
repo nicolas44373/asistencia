@@ -131,62 +131,43 @@ export default function Admin() {
     }
 
     checkAdmin()
-  }, [selectedDate])
+  }, [selectedDate, router])
 
   const fetchMonthlyRecords = async (date: string) => {
     try {
       const startDate = new Date(date);
-      startDate.setDate(1); // Primer día del mes
-      const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0); // Último día del mes
-  
-      console.log("Fecha de inicio:", startDate);
-      console.log("Fecha de fin:", endDate);
-  
-      // Obtener todos los usuarios
+      startDate.setDate(1); 
+      const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0); 
+
       const { data: usuarios, error: userError } = await supabase
         .from('usuarios')
         .select('id, nombre')
         .order('nombre');
-  
+
       if (userError) throw userError;
-      console.log("Usuarios obtenidos:", usuarios);
-  
-      // Generar un array con todas las fechas del mes
+
       const monthDates = Array.from(
         { length: endDate.getDate() }, 
         (_, i) => new Date(startDate.getFullYear(), startDate.getMonth(), i + 1)
       );
-  
-      console.log("Fechas del mes:", monthDates);
-  
+
       const monthlyData: MonthlyAttendanceRecord[] = [];
-  
-      // Consultar la asistencia para cada día del mes
+
       for (const currentDate of monthDates) {
-        const dateStr = currentDate.toISOString().split('T')[0]; // Formato YYYY-MM-DD
-  
-        console.log("Consultando fecha:", dateStr);
-  
-        // Consultar asistencia de la mañana y tarde para la fecha actual
+        const dateStr = currentDate.toISOString().split('T')[0];
+
         const [mañanaResult, tardeResult] = await Promise.all([
           supabase.from('asistencia_mañana').select('*').eq('fecha', dateStr),
           supabase.from('asistencia_tarde').select('*').eq('fecha', dateStr)
         ]);
-  
+
         if (mañanaResult.error) throw mañanaResult.error;
         if (tardeResult.error) throw tardeResult.error;
-  
-        console.log(`Resultados para ${dateStr}:`, {
-          mañana: mañanaResult.data,
-          tarde: tardeResult.data
-        });
-  
-        // Para cada usuario, buscar sus registros de asistencia
+
         usuarios.forEach(usuario => {
           const mañana = mañanaResult.data?.find(r => r.usuario_id === usuario.id);
           const tarde = tardeResult.data?.find(r => r.usuario_id === usuario.id);
-  
-          // Agregar los datos al array mensual
+
           monthlyData.push({
             fecha: dateStr,
             nombre: usuario.nombre,
@@ -203,10 +184,9 @@ export default function Admin() {
           });
         });
       }
-  
-      console.log('Registros mensuales obtenidos:', monthlyData);
+
       setMonthlyRecords(monthlyData);
-  
+
     } catch (error) {
       console.error('Error al cargar los registros mensuales:', error);
       setError('Error al cargar los registros mensuales.');
@@ -286,7 +266,6 @@ export default function Admin() {
       let ingresoMañana = record.turno_mañana?.ingreso ? formatDateTime(record.turno_mañana.ingreso) : "No registrado";
       let ingresoTarde = record.turno_tarde?.ingreso ? formatDateTime(record.turno_tarde.ingreso) : "No registrado";
   
-      // Resaltado textual de los horarios tardíos
       if (ingresoMañana !== "No registrado" && getTimeInMinutes(ingresoMañana) > limiteMañana) {
         ingresoMañana = `Tarde: ${ingresoMañana}`;
       }
@@ -310,27 +289,17 @@ export default function Admin() {
     const worksheet = XLSX.utils.json_to_sheet(formattedRecords);
   
     worksheet["!cols"] = [
-      { wch: 20 }, // Empleado
-      { wch: 10 }, // Día
-      { wch: 15 }, // Ingreso Mañana
-      { wch: 15 }, // Egreso Mañana
-      { wch: 15 }, // Ingreso Tarde
-      { wch: 15 }  // Egreso Tarde
+      { wch: 20 }, 
+      { wch: 10 }, 
+      { wch: 15 }, 
+      { wch: 15 }, 
+      { wch: 15 }, 
+      { wch: 15 }
     ];
   
     XLSX.utils.book_append_sheet(workbook, worksheet, "Asistencia");
     XLSX.writeFile(workbook, `Asistencia_${monthName}.xlsx`);
   };
-  
-
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-xl animate-pulse">Cargando registros...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
@@ -388,3 +357,4 @@ export default function Admin() {
     </div>
   );
 }
+

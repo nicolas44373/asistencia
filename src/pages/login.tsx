@@ -13,43 +13,34 @@ export default function Login() {
     e.preventDefault()
 
     try {
-      // Primero intentamos login como usuario (por DNI)
-      let { data: userData, error: userError } = await supabase
+      // Intentamos login tanto para usuarios como para administradores con un solo query utilizando 'or' en la condición
+      const { data, error } = await supabase
         .from('usuarios')
         .select('id, nombre, dni')
-        .eq('dni', identifier)
+        .or(`dni.eq.${identifier},nombre.eq.${identifier}`)
         .eq('contraseña', contraseña)
         .single()
 
-      if (userError || !userData) {
-        // Si no es usuario, intentamos login como admin (por nombre)
-        const { data: adminData, error: adminError } = await supabase
-          .from('admin')
-          .select('id, nombre')
-          .eq('nombre', identifier)
-          .eq('contraseña', contraseña)
-          .single()
-
-        if (adminError || !adminData) {
-          setError('Credenciales incorrectas')
-          return
-        }
-
-        // Login exitoso como admin
-        sessionStorage.setItem('userId', adminData.id)
-        sessionStorage.setItem('nombre', adminData.nombre)
-        sessionStorage.setItem('userType', 'admin')
-        router.push('/admin')
+      if (error || !data) {
+        setError('Credenciales incorrectas')
         return
       }
 
-      // Login exitoso como usuario
-      sessionStorage.setItem('userId', userData.id)
-      sessionStorage.setItem('nombre', userData.nombre)
-      sessionStorage.setItem('dni', userData.dni)
-      sessionStorage.setItem('userType', 'empleado')
-      router.push('/employee')
-
+      // Determinamos el tipo de usuario (empleado o admin) según el campo 'dni'
+      if (data.dni) {
+        // Login exitoso como usuario (empleado)
+        sessionStorage.setItem('userId', data.id)
+        sessionStorage.setItem('nombre', data.nombre)
+        sessionStorage.setItem('dni', data.dni)
+        sessionStorage.setItem('userType', 'empleado')
+        router.push('/employee')
+      } else {
+        // Login exitoso como admin (sin DNI)
+        sessionStorage.setItem('userId', data.id)
+        sessionStorage.setItem('nombre', data.nombre)
+        sessionStorage.setItem('userType', 'admin')
+        router.push('/admin')
+      }
     } catch (error) {
       console.error('Error de login:', error)
       setError('Error al iniciar sesión')

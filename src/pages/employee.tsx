@@ -8,7 +8,7 @@ export default function Employee() {
   const [nombre, setNombre] = useState<string>('');
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [authError, setAuthError] = useState<string>('');
+  const [, setAuthError] = useState<string>('');
   const [turno, setTurno] = useState<string>('');
   const router = useRouter();
 
@@ -39,46 +39,43 @@ export default function Employee() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [router]);
+  }, [router, supabase]); // Agregado supabase como dependencia
 
   const registrarEvento = async (tipoEvento: string) => {
     if (!userId || !turno) {
       alert('Debe seleccionar un turno antes de registrar el evento.');
       return;
     }
-  
+
     try {
       const timestamp = new Date();
       const fechaActual = timestamp.toISOString().split('T')[0]; // Formato YYYY-MM-DD
-      
+
       const tablaAsistencia = turno === 'mañana' ? 'asistencia_mañana' : 'asistencia_tarde';
-  
+
       const { data: registroExistente, error: errorSelect } = await supabase
         .from(tablaAsistencia)
         .select('*')
         .eq('usuario_id', userId)
         .eq('fecha', fechaActual)
         .single();
-  
+
       if (errorSelect && errorSelect.code !== 'PGRST116') {
         throw errorSelect;
       }
-  
-      let updateData: any = {};
+
+      let updateData: { usuario_id: string; fecha: string; ingreso?: Date | null; egreso?: Date | null } = {
+        usuario_id: userId,
+        fecha: fechaActual
+      };
+      
       if (!registroExistente) {
         // Para nuevo registro
-        updateData = {
-          usuario_id: userId,
-          fecha: fechaActual,
-          ingreso: timestamp,
-          egreso: null
-        };
+        updateData.ingreso = timestamp;
+        updateData.egreso = null;
       } else if (registroExistente.ingreso && !registroExistente.egreso && tipoEvento === "egreso") {
         // Para actualizar egreso
-        updateData = {
-          ...registroExistente,
-          egreso: timestamp
-        };
+        updateData.egreso = timestamp;
       } else {
         if (registroExistente.egreso) {
           alert('Ya se registraron ingreso y egreso para hoy.');
@@ -87,13 +84,14 @@ export default function Employee() {
         }
         return;
       }
-  
+      
+
       const { error } = await supabase
         .from(tablaAsistencia)
         .upsert([updateData]);
-  
+
       if (error) throw error;
-  
+
       alert(`${tipoEvento} registrado con éxito para el turno ${turno}`);
     } catch (error) {
       console.error('Error al registrar asistencia:', error);
@@ -102,9 +100,11 @@ export default function Employee() {
   };
 
   if (loading) {
-    return <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <p className="text-lg">Cargando...</p>
-    </div>;
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-lg">Cargando...</p>
+      </div>
+    );
   }
 
   return (
