@@ -3,7 +3,7 @@ import Head from 'next/head'
 import { useEffect } from 'react'
 import { useSupabaseClient } from '@supabase/auth-helpers-react'
 import { Clock, Users, Shield } from 'lucide-react'
-import "../styles/globals.css";
+
 
 export default function Home() {
   const router = useRouter()

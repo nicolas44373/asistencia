@@ -3,7 +3,7 @@ import { useRouter } from 'next/router'
 import { supabase } from '../lib/supabaseClient'
 import { Printer, FileSpreadsheet } from 'lucide-react'
 import * as XLSX from 'xlsx';
-import "@/styles/globals.css"
+
 
 interface AttendanceRecord {
   fecha: string
