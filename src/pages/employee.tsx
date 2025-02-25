@@ -109,19 +109,19 @@ export default function Employee() {
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-md mx-auto bg-white rounded-lg shadow p-6">
-        <h1 className="text-2xl font-bold mb-4">Panel de Empleado</h1>
+        <h1 className="text-2xl text-black font-bold mb-4">Panel de Empleado</h1>
         <div className="mb-6">
-          <p className="text-lg">Bienvenido, {nombre}</p>
-          <p className="text-xl font-semibold mt-4">
-            {currentTime.toLocaleTimeString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}
+          <p className="text-lg text-black">Bienvenido, {nombre}</p>
+          <p className="text-xl text-black font-semibold mt-4">
+            {currentTime.toLocaleTimeString('es-AR text-black', { timeZone: 'America/Argentina/Buenos_Aires' })}
           </p>
           <p className="text-md">
-            {currentTime.toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}
+            {currentTime.toLocaleDateString('es-AR text-black', { timeZone: 'America/Argentina/Buenos_Aires' })}
           </p>
         </div>
 
         <select
-          className="w-full p-2 border rounded mb-4"
+          className="w-full p-2 border rounded mb-4 text-black"
           value={turno}
           onChange={(e) => setTurno(e.target.value)}
         >

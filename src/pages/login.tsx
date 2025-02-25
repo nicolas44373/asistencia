@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useRouter } from 'next/router'
 import { supabase } from '../lib/supabaseClient'
 
-
 export default function Login() {
   const [identifier, setIdentifier] = useState('')
   const [contraseña, setContraseña] = useState('')
@@ -13,29 +12,48 @@ export default function Login() {
     e.preventDefault()
 
     try {
-      // Intentamos login tanto para usuarios como para administradores con un solo query utilizando 'or' en la condición
-      const { data, error } = await supabase
-        .from('usuarios')
-        .select('id, nombre, dni')
-        .or(`dni.eq.${identifier},nombre.eq.${identifier}`)
-        .eq('contraseña', contraseña)
-        .single()
+      let data: any = null
+      let error: any = null
+
+      // Si el identifier es un DNI (suponiendo que es numérico), buscamos en la tabla 'usuarios'
+      if (!isNaN(Number(identifier))) {
+        const response = await supabase
+          .from('usuarios')
+          .select('id, nombre, dni')
+          .eq('dni', identifier)
+          .eq('contraseña', contraseña)
+          .single()
+
+        data = response.data
+        error = response.error
+      } else {
+        // Si el identifier no es un DNI, buscamos en la tabla 'admin' (por nombre)
+        const response = await supabase
+          .from('admin')
+          .select('id, nombre')
+          .eq('nombre', identifier)
+          .eq('contraseña', contraseña)
+          .single()
+
+        data = response.data
+        error = response.error
+      }
 
       if (error || !data) {
         setError('Credenciales incorrectas')
         return
       }
 
-      // Determinamos el tipo de usuario (empleado o admin) según el campo 'dni'
+      // Determinamos el tipo de usuario
       if (data.dni) {
-        // Login exitoso como usuario (empleado)
+        // Login exitoso como empleado
         sessionStorage.setItem('userId', data.id)
         sessionStorage.setItem('nombre', data.nombre)
         sessionStorage.setItem('dni', data.dni)
         sessionStorage.setItem('userType', 'empleado')
         router.push('/employee')
       } else {
-        // Login exitoso como admin (sin DNI)
+        // Login exitoso como admin
         sessionStorage.setItem('userId', data.id)
         sessionStorage.setItem('nombre', data.nombre)
         sessionStorage.setItem('userType', 'admin')
@@ -51,8 +69,8 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
         <div className="text-center">
-          <h2 className="text-3xl font-bold">Iniciar Sesión</h2>
-          <p className="mt-2 text-sm text-gray-600">
+          <h2 className="text-3xl text-black font-bold">Iniciar Sesión</h2>
+          <p className="mt-2 text-sm text-black">
             Empleados: usar DNI | Administradores: usar nombre
           </p>
         </div>
@@ -65,7 +83,7 @@ export default function Login() {
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-black">
               DNI o Nombre
             </label>
             <input
@@ -78,7 +96,7 @@ export default function Login() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-black">
               Contraseña
             </label>
             <input
