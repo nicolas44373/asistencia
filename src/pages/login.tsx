@@ -2,6 +2,13 @@ import { useState } from 'react'
 import { useRouter } from 'next/router'
 import { supabase } from '../lib/supabaseClient'
 
+// Define tipos explícitos para 'data' y 'error'
+type User = {
+  id: string
+  nombre: string
+  dni?: string // El campo 'dni' puede ser opcional
+}
+
 export default function Login() {
   const [identifier, setIdentifier] = useState('')
   const [contraseña, setContraseña] = useState('')
@@ -12,7 +19,7 @@ export default function Login() {
     e.preventDefault()
 
     try {
-      let data: any = null
+      let data: User | null = null
       let error: any = null
 
       // Si el identifier es un DNI (suponiendo que es numérico), buscamos en la tabla 'usuarios'

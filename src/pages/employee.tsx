@@ -38,7 +38,7 @@ export default function Employee() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []); // Agregado supabase como dependencia
+  }, [router]); // Agregado supabase como dependencia
 
   const registrarEvento = async (tipoEvento: string) => {
     if (!userId || !turno) {
