@@ -261,110 +261,67 @@ export default function Admin() {
   }
   
 
-const isLate = (time: string | null, limitTime: string): boolean => {
-  if (!time || time === "No registrado") return false;
-
-  const [hours, minutes] = time.split(":").map(Number);
-  const timeInMinutes = hours * 60 + minutes;
-
-  const [limitHours, limitMinutes] = limitTime.split(":").map(Number);
-  const limitTimeInMinutes = limitHours * 60 + limitMinutes;
-
-  return timeInMinutes > limitTimeInMinutes;
-};
-
-const exportToExcel = (
-  monthlyRecords: MonthlyAttendanceRecord[],
-  selectedDate: string,
-  formatDateTime: (date: string | null) => string
-) => {
-  const date = new Date(selectedDate);
-  const monthName = date.toLocaleString('es-AR', { month: 'long', year: 'numeric', timeZone: 'America/Argentina/Buenos_Aires' });
-
-  const filteredRecords = monthlyRecords.filter(record => {
-    return (
+  const exportToExcel = (
+    monthlyRecords: MonthlyAttendanceRecord[],
+    selectedDate: string,
+    formatDateTime: (date: string | null) => string
+  ) => {
+    const date = new Date(selectedDate);
+    const monthName = date.toLocaleString('es-AR', { month: 'long', year: 'numeric', timeZone: 'America/Argentina/Buenos_Aires' });
+  
+    const filteredRecords = monthlyRecords.filter(record => 
       (record.turno_mañana?.ingreso || record.turno_mañana?.egreso) ||
       (record.turno_tarde?.ingreso || record.turno_tarde?.egreso)
     );
-  });
-
-  const formattedRecords = filteredRecords.map((record) => {
-    const ingresoMañana = record.turno_mañana?.ingreso ? formatDateTime(record.turno_mañana.ingreso) : "No registrado";
-    const egresoMañana = record.turno_mañana?.egreso ? formatDateTime(record.turno_mañana.egreso) : "No registrado";
-    const ingresoTarde = record.turno_tarde?.ingreso ? formatDateTime(record.turno_tarde.ingreso) : "No registrado";
-    const egresoTarde = record.turno_tarde?.egreso ? formatDateTime(record.turno_tarde.egreso) : "No registrado";
-
-    return {
-      Empleado: record.nombre,
-      Día: record.day,
-      "Ingreso Mañana": ingresoMañana,
-      "Egreso Mañana": egresoMañana,
-      "Ingreso Tarde": ingresoTarde,
-      "Egreso Tarde": egresoTarde
-    };
-  });
-
-  formattedRecords.sort((a, b) => a.Día - b.Día);
-
-  const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.json_to_sheet(formattedRecords);
-
-  const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-
-  // Lógica de resaltado en celdas
-  for (let row = range.s.r + 1; row <= range.e.r; row++) {
-    const ingresoMañanaCell = XLSX.utils.encode_cell({ r: row, c: 2 });
-    const ingresoTardeCell = XLSX.utils.encode_cell({ r: row, c: 4 });
-
-    const ingresoMañanaValue = worksheet[ingresoMañanaCell]?.v;
-    const ingresoTardeValue = worksheet[ingresoTardeCell]?.v;
-
-    // Hora límite en minutos
+  
     const limiteMañana = 8 * 60 + 15; // 08:15 en minutos
     const limiteTarde = 17 * 60 + 15; // 17:15 en minutos
-
-    // Convertimos la hora procesada a minutos
+  
     const getTimeInMinutes = (time: string) => {
       const [hours, minutes] = time.split(":").map(Number);
       return hours * 60 + minutes;
     };
-
-    // Resaltado para Ingreso Mañana
-    if (ingresoMañanaValue && ingresoMañanaValue !== "No registrado") {
-      const horaIngresoMañana = getTimeInMinutes(ingresoMañanaValue);
-      if (horaIngresoMañana > limiteMañana) {
-        // Verificamos que la celda tenga un objeto de estilo antes de aplicarlo
-        if (!worksheet[ingresoMañanaCell].s) worksheet[ingresoMañanaCell].s = {}; // Aseguramos que la celda tenga un objeto de estilo
-        worksheet[ingresoMañanaCell].s.fill = { fgColor: { rgb: "FFCCCB" } }; // Color de fondo
-        worksheet[ingresoMañanaCell].s.font = { bold: true }; // Texto en negrita
+  
+    const formattedRecords = filteredRecords.map(record => {
+      let ingresoMañana = record.turno_mañana?.ingreso ? formatDateTime(record.turno_mañana.ingreso) : "No registrado";
+      let ingresoTarde = record.turno_tarde?.ingreso ? formatDateTime(record.turno_tarde.ingreso) : "No registrado";
+  
+      // Resaltado textual de los horarios tardíos
+      if (ingresoMañana !== "No registrado" && getTimeInMinutes(ingresoMañana) > limiteMañana) {
+        ingresoMañana = `Tarde: ${ingresoMañana}`;
       }
-    }
-
-    // Resaltado para Ingreso Tarde
-    if (ingresoTardeValue && ingresoTardeValue !== "No registrado") {
-      const horaIngresoTarde = getTimeInMinutes(ingresoTardeValue);
-      if (horaIngresoTarde > limiteTarde) {
-        // Verificamos que la celda tenga un objeto de estilo antes de aplicarlo
-        if (!worksheet[ingresoTardeCell].s) worksheet[ingresoTardeCell].s = {}; // Aseguramos que la celda tenga un objeto de estilo
-        worksheet[ingresoTardeCell].s.fill = { fgColor: { rgb: "FFCCCB" } }; // Color de fondo
-        worksheet[ingresoTardeCell].s.font = { bold: true }; // Texto en negrita
+      if (ingresoTarde !== "No registrado" && getTimeInMinutes(ingresoTarde) > limiteTarde) {
+        ingresoTarde = `Tarde: ${ingresoTarde}`;
       }
-    }
-  }
-
-  worksheet["!cols"] = [
-    { wch: 20 },
-    { wch: 10 },
-    { wch: 15 },
-    { wch: 15 },
-    { wch: 15 },
-    { wch: 15 }
-  ];
-
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Asistencia");
-  // Exportación al navegador
-  XLSX.writeFile(workbook, `Asistencia_${monthName}.xlsx`);
-};
+  
+      return {
+        Empleado: record.nombre,
+        Día: record.day,
+        "Ingreso Mañana": ingresoMañana,
+        "Egreso Mañana": record.turno_mañana?.egreso ? formatDateTime(record.turno_mañana.egreso) : "No registrado",
+        "Ingreso Tarde": ingresoTarde,
+        "Egreso Tarde": record.turno_tarde?.egreso ? formatDateTime(record.turno_tarde.egreso) : "No registrado",
+      };
+    });
+  
+    formattedRecords.sort((a, b) => a.Día - b.Día);
+  
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(formattedRecords);
+  
+    worksheet["!cols"] = [
+      { wch: 20 }, // Empleado
+      { wch: 10 }, // Día
+      { wch: 15 }, // Ingreso Mañana
+      { wch: 15 }, // Egreso Mañana
+      { wch: 15 }, // Ingreso Tarde
+      { wch: 15 }  // Egreso Tarde
+    ];
+  
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Asistencia");
+    XLSX.writeFile(workbook, `Asistencia_${monthName}.xlsx`);
+  };
+  
 
 
   if (loading) {
