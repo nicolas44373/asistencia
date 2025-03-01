@@ -77,8 +77,8 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
         <div className="text-center">
-          <h2 className="text-3xl text-black font-bold">Iniciar Sesión</h2>
-          <p className="mt-2 text-sm text-black">
+          <h2 className="text-3xl text-gray-700 font-bold">Iniciar Sesión</h2>
+          <p className="mt-2 text-sm text-gray-700">
             Empleados: usar DNI | Administradores: usar nombre
           </p>
         </div>
@@ -91,7 +91,7 @@ export default function Login() {
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-black">
+            <label className="block text-sm font-medium text-gray-700">
               DNI o Nombre
             </label>
             <input
@@ -104,7 +104,7 @@ export default function Login() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-black">
+            <label className="block text-sm font-medium text-gray-700">
               Contraseña
             </label>
             <input
