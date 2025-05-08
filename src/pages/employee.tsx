@@ -112,7 +112,10 @@ export default function Employee() {
         <div className="mb-6">
           <p className="text-lg text-black">Bienvenido, {nombre}</p>
           <p className="text-xl text-black font-semibold mt-4">
-            {currentTime.toLocaleTimeString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}
+            {currentTime.toLocaleTimeString('es-AR', { 
+              timeZone: 'America/Argentina/Buenos_Aires',
+              hour12: false 
+            })}
           </p>
           <p className="text-md">
             {currentTime.toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}
