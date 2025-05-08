@@ -113,7 +113,7 @@ export default function Login() {
 
       // Redirigir a la página de login
       router.push('/login')
-    } catch (error) {
+    } catch {
       setError('Error al agregar el empleado')
     }
   }
