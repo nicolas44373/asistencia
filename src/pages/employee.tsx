@@ -38,7 +38,7 @@ export default function Employee() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [router]); // Agregado supabase como dependencia
+  }, [router]);
 
   const registrarEvento = async (tipoEvento: string) => {
     if (!userId || !turno) {
@@ -48,7 +48,7 @@ export default function Employee() {
 
     try {
       const timestamp = new Date();
-      const fechaActual = timestamp.toISOString().split('T')[0]; // Formato YYYY-MM-DD
+      const fechaActual = timestamp.toISOString().split('T')[0];
 
       const tablaAsistencia = turno === 'mañana' ? 'asistencia_mañana' : 'asistencia_tarde';
 
@@ -67,13 +67,11 @@ export default function Employee() {
         usuario_id: userId,
         fecha: fechaActual
       };
-      
+
       if (!registroExistente) {
-        // Para nuevo registro
         updateData.ingreso = timestamp;
         updateData.egreso = null;
       } else if (registroExistente.ingreso && !registroExistente.egreso && tipoEvento === "egreso") {
-        // Para actualizar egreso
         updateData.egreso = timestamp;
       } else {
         if (registroExistente.egreso) {
@@ -83,18 +81,16 @@ export default function Employee() {
         }
         return;
       }
-      
 
       const { error } = await supabase
-  .from(tablaAsistencia)
-  .upsert([updateData], { onConflict: 'usuario_id,fecha' });
-
-
-
+        .from(tablaAsistencia)
+        .upsert([updateData], { onConflict: 'usuario_id,fecha' });
 
       if (error) throw error;
 
       alert(`${tipoEvento} registrado con éxito para el turno ${turno}`);
+      sessionStorage.clear();
+      router.push('/login');
     } catch (error) {
       console.error('Error al registrar asistencia:', error);
       alert('Error al registrar el evento. Por favor, intente nuevamente.');
@@ -116,10 +112,10 @@ export default function Employee() {
         <div className="mb-6">
           <p className="text-lg text-black">Bienvenido, {nombre}</p>
           <p className="text-xl text-black font-semibold mt-4">
-          {currentTime.toLocaleTimeString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}
+            {currentTime.toLocaleTimeString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}
           </p>
           <p className="text-md">
-          {currentTime.toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}
+            {currentTime.toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}
           </p>
         </div>
 

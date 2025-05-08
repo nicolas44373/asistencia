@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 import { supabase } from '../lib/supabaseClient'
-import { Printer, FileSpreadsheet } from 'lucide-react'
+import { Printer, FileSpreadsheet, User } from 'lucide-react'
 import * as XLSX from 'xlsx';
-
 
 interface AttendanceRecord {
   fecha: string
@@ -23,10 +22,14 @@ interface MonthlyAttendanceRecord extends AttendanceRecord {
   day: number
 }
 
-const AttendanceTable = ({ records, formatDateTime }: { 
-  records: AttendanceRecord[], 
-  formatDateTime: (timestamp: string | null) => string 
+const AttendanceTable = ({
+  records,
+  formatDateTime,
+}: {
+  records: AttendanceRecord[],
+  formatDateTime: (timestamp: string | null) => string,
 }) => {
+
   const getStatusColor = (time: string | null | undefined) => {
     if (!time) return 'bg-gray-100'
     return 'bg-green-100'
@@ -113,8 +116,9 @@ export default function Admin() {
   const [, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
+  const [selectedEmployee, setSelectedEmployee] = useState<string>('todos')
   const router = useRouter()
-
+  
   useEffect(() => {
     const checkAdmin = async () => {
       const userId = sessionStorage.getItem('userId')
@@ -239,23 +243,38 @@ export default function Admin() {
       hour12: false
     })
   }
-  
+
+  // Obtener lista única de empleados para el selector
+  const uniqueEmployees = monthlyRecords
+    .map(r => ({ id: r.usuario_id, nombre: r.nombre }))
+    .filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
 
   const exportToExcel = (
     monthlyRecords: MonthlyAttendanceRecord[],
     selectedDate: string,
-    formatDateTime: (date: string | null) => string
+    formatDateTime: (date: string | null) => string,
+    employeeId?: string
   ) => {
     const date = new Date(selectedDate);
-    const monthName = date.toLocaleString('es-AR', { month: 'long', year: 'numeric', timeZone: 'America/Argentina/Buenos_Aires' });
+    const monthName = date.toLocaleString('es-AR', {
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'America/Argentina/Buenos_Aires'
+    });
   
-    const filteredRecords = monthlyRecords.filter(record => 
-      (record.turno_mañana?.ingreso || record.turno_mañana?.egreso) ||
-      (record.turno_tarde?.ingreso || record.turno_tarde?.egreso)
+    const filteredRecords = monthlyRecords.filter(record =>
+      (!employeeId || employeeId === 'todos' || record.usuario_id === employeeId) &&
+      ((record.turno_mañana?.ingreso || record.turno_mañana?.egreso) ||
+       (record.turno_tarde?.ingreso || record.turno_tarde?.egreso))
     );
   
-    const limiteMañana = 8 * 60 + 15; // 08:15 en minutos
-    const limiteTarde = 17 * 60 + 15; // 17:15 en minutos
+    if (filteredRecords.length === 0) {
+      alert("No hay registros de asistencia para exportar.");
+      return;
+    }
+  
+    const limiteMañana = 8 * 60 + 15;
+    const limiteTarde = 17 * 60 + 15;
   
     const getTimeInMinutes = (time: string) => {
       const [hours, minutes] = time.split(":").map(Number);
@@ -283,22 +302,57 @@ export default function Admin() {
       };
     });
   
-    formattedRecords.sort((a, b) => a.Día - b.Día);
+    formattedRecords.sort((a, b) => {
+      if (a.Empleado === b.Empleado) {
+        return a.Día - b.Día;
+      }
+      return a.Empleado.localeCompare(b.Empleado);
+    });
+  
+    const nombreEmpleado = employeeId && employeeId !== 'todos'
+      ? uniqueEmployees.find(e => e.id === employeeId)?.nombre?.replace(/\s+/g, '_') || "Empleado"
+      : "Todos";
   
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.json_to_sheet(formattedRecords);
-  
     worksheet["!cols"] = [
-      { wch: 20 }, 
-      { wch: 10 }, 
-      { wch: 15 }, 
-      { wch: 15 }, 
-      { wch: 15 }, 
-      { wch: 15 }
+      { wch: 25 }, // Empleado  
+      { wch: 10 }, // Día
+      { wch: 20 }, // Ingreso Mañana
+      { wch: 20 }, // Egreso Mañana
+      { wch: 20 }, // Ingreso Tarde
+      { wch: 20 }  // Egreso Tarde
     ];
-  
     XLSX.utils.book_append_sheet(workbook, worksheet, "Asistencia");
-    XLSX.writeFile(workbook, `Asistencia_${monthName}.xlsx`);
+    XLSX.writeFile(workbook, `Asistencia_${nombreEmpleado}_${monthName}.xlsx`);
+  };
+
+  // Función para exportar todos los empleados individualmente
+  const exportAllEmployeesIndividually = () => {
+    if (uniqueEmployees.length === 0) {
+      alert("No hay empleados para exportar.");
+      return;
+    }
+
+    let countExported = 0;
+    uniqueEmployees.forEach(employee => {
+      const filteredRecords = monthlyRecords.filter(
+        record => record.usuario_id === employee.id &&
+        ((record.turno_mañana?.ingreso || record.turno_mañana?.egreso) ||
+         (record.turno_tarde?.ingreso || record.turno_tarde?.egreso))
+      );
+
+      if (filteredRecords.length > 0) {
+        exportToExcel(monthlyRecords, selectedDate, formatDateTime, employee.id);
+        countExported++;
+      }
+    });
+
+    if (countExported === 0) {
+      alert("No hay registros de asistencia para exportar.");
+    } else {
+      alert(`Se han exportado ${countExported} archivos de empleados.`);
+    }
   };
 
   return (
@@ -315,25 +369,12 @@ export default function Admin() {
                 className="border rounded-md p-2"
               />
               <button
-  onClick={() => {
-    const filteredRecords = monthlyRecords.filter(record => {
-      return (
-        (record.turno_mañana?.ingreso || record.turno_mañana?.egreso) ||
-        (record.turno_tarde?.ingreso || record.turno_tarde?.egreso)
-      );
-    });
-
-    if (filteredRecords.length > 0) {
-      exportToExcel(monthlyRecords, selectedDate, formatDateTime);
-    } else {
-      alert("No hay registros de asistencia para exportar.");
-    }
-  }}
-  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
->
-  <FileSpreadsheet className="h-4 w-4" />
-  Exportar Mes
-</button>
+                onClick={() => exportToExcel(monthlyRecords, selectedDate, formatDateTime)}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                Exportar Todo
+              </button>
               <button
                 onClick={() => window.print()}
                 className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
@@ -351,10 +392,54 @@ export default function Admin() {
           )}
 
           <AttendanceStats records={attendanceRecords} />
-          <AttendanceTable records={attendanceRecords} formatDateTime={formatDateTime} />
+
+          {/* Sección de exportación individual */}
+          <div className="bg-gray-50 p-4 mb-6 rounded-lg border">
+            <h2 className="text-lg font-semibold mb-4">Exportación Individual</h2>
+            <div className="flex gap-4 items-center">
+              <div className="flex-grow">
+                <select
+                  value={selectedEmployee}
+                  onChange={(e) => setSelectedEmployee(e.target.value)}
+                  className="w-full border rounded-md p-2"
+                >
+                  <option value="todos">Todos los empleados</option>
+                  {uniqueEmployees.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={() => {
+                  if (selectedEmployee === 'todos') {
+                    // Preguntar al usuario si realmente quiere exportar todos individualmente
+                    if (confirm("¿Desea exportar un archivo Excel individual para cada empleado?")) {
+                      exportAllEmployeesIndividually();
+                    } else {
+                      // Exportar un solo archivo con todos los empleados
+                      exportToExcel(monthlyRecords, selectedDate, formatDateTime);
+                    }
+                  } else {
+                    // Exportar solo el empleado seleccionado
+                    exportToExcel(monthlyRecords, selectedDate, formatDateTime, selectedEmployee);
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                <User className="h-4 w-4" />
+                Exportar Seleccionado
+              </button>
+            </div>
+          </div>
+
+          <AttendanceTable
+            records={attendanceRecords}
+            formatDateTime={formatDateTime}
+          />
         </div>
       </div>
     </div>
   );
 }
-
