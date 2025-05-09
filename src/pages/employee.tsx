@@ -6,6 +6,7 @@ export default function Employee() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [nombre, setNombre] = useState<string>('');
   const [userId, setUserId] = useState<string | null>(null);
+  const [sucursal, setSucursal] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [, setAuthError] = useState<string>('');
   const [turno, setTurno] = useState<string>('');
@@ -18,6 +19,7 @@ export default function Employee() {
 
       const storedUserId = sessionStorage.getItem('userId');
       const storedNombre = sessionStorage.getItem('nombre');
+      const storedSucursal = sessionStorage.getItem('sucursal');
       const userType = sessionStorage.getItem('userType');
 
       if (!storedUserId || !storedNombre || userType !== 'empleado') {
@@ -28,6 +30,13 @@ export default function Employee() {
 
       setNombre(storedNombre);
       setUserId(storedUserId);
+      setSucursal(storedSucursal || '');
+      
+      // Si es de Juramento, establecer automáticamente el turno mañana
+      if (storedSucursal === 'juramento') {
+        setTurno('mañana');
+      }
+      
       setLoading(false);
     };
 
@@ -40,9 +49,35 @@ export default function Employee() {
     return () => clearInterval(timer);
   }, [router]);
 
+  const verificarHorarioPermitido = (turnoSeleccionado: string): boolean => {
+    const now = new Date();
+    const hora = now.getHours();
+    const minutos = now.getMinutes();
+    
+    if (turnoSeleccionado === 'mañana') {
+      // Para el turno mañana, sólo permitir hasta las 9:00 AM
+      return (hora < 9) || (hora === 9 && minutos === 0);
+    } else if (turnoSeleccionado === 'tarde') {
+      // Para el turno tarde, sólo permitir hasta las 18:00 (6:00 PM)
+      return (hora < 18) || (hora === 18 && minutos === 0);
+    }
+    
+    return false;
+  };
+
   const registrarEvento = async (tipoEvento: string) => {
     if (!userId || !turno) {
       alert('Debe seleccionar un turno antes de registrar el evento.');
+      return;
+    }
+
+    // Verificar restricciones de horario para el ingreso
+    if (tipoEvento === "ingreso" && !verificarHorarioPermitido(turno)) {
+      if (turno === 'mañana') {
+        alert('No se puede registrar el ingreso después de las 9:00 AM para el turno mañana.');
+      } else {
+        alert('No se puede registrar el ingreso después de las 18:00 PM para el turno tarde.');
+      }
       return;
     }
 
@@ -105,12 +140,21 @@ export default function Employee() {
     );
   }
 
+  // Determinar si el registro de ingreso está disponible según el horario
+  const puedeRegistrarIngreso = verificarHorarioPermitido(turno);
+  const mensajeHorario = turno === 'mañana' 
+    ? 'Ingreso disponible hasta las 9:00 AM' 
+    : turno === 'tarde' 
+      ? 'Ingreso disponible hasta las 18:00 PM'
+      : '';
+
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-md mx-auto bg-white rounded-lg shadow p-6">
         <h1 className="text-2xl text-black font-bold mb-4">Panel de Empleado</h1>
         <div className="mb-6">
           <p className="text-lg text-black">Bienvenido, {nombre}</p>
+          <p className="text-sm text-gray-600">Sucursal: {sucursal.toUpperCase()}</p>
           <p className="text-xl text-black font-semibold mt-4">
             {currentTime.toLocaleTimeString('es-AR', { 
               timeZone: 'America/Argentina/Buenos_Aires',
@@ -122,27 +166,43 @@ export default function Employee() {
           </p>
         </div>
 
-        <select
-          className="w-full p-2 border rounded mb-4 text-black"
-          value={turno}
-          onChange={(e) => setTurno(e.target.value)}
-        >
-          <option value="">Seleccionar Turno</option>
-          <option value="mañana">Turno Mañana</option>
-          <option value="tarde">Turno Tarde</option>
-        </select>
+        {sucursal === 'jbj' ? (
+          <select
+            className="w-full p-2 border rounded mb-4 text-black"
+            value={turno}
+            onChange={(e) => setTurno(e.target.value)}
+          >
+            <option value="">Seleccionar Turno</option>
+            <option value="mañana">Turno Mañana</option>
+            <option value="tarde">Turno Tarde</option>
+          </select>
+        ) : (
+          <div className="w-full p-2 border rounded mb-4 text-black bg-gray-100">
+            <p>Turno: Mañana (único disponible para sucursal Juramento)</p>
+          </div>
+        )}
+
+        {turno && (
+          <p className="text-sm text-gray-600 mb-2">{mensajeHorario}</p>
+        )}
 
         <button
           onClick={() => registrarEvento("ingreso")}
-          className={`w-full py-2 px-4 rounded mb-4 ${turno ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
-          disabled={!turno}
+          className={`w-full py-2 px-4 rounded mb-4 ${
+            turno && puedeRegistrarIngreso 
+              ? 'bg-green-500 text-white hover:bg-green-600' 
+              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+          }`}
+          disabled={!turno || !puedeRegistrarIngreso}
         >
           Registrar Ingreso
         </button>
 
         <button
           onClick={() => registrarEvento("egreso")}
-          className={`w-full py-2 px-4 rounded ${turno ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+          className={`w-full py-2 px-4 rounded ${
+            turno ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+          }`}
           disabled={!turno}
         >
           Registrar Egreso

@@ -7,6 +7,7 @@ type User = {
   id: string
   nombre: string
   dni?: string
+  sucursal?: string
 }
 
 export default function Login() {
@@ -14,12 +15,15 @@ export default function Login() {
   const [contraseña, setContraseña] = useState('')
   const [error, setError] = useState('')
   const [adminPassword, setAdminPassword] = useState('')
+  const [showAdminPasswordInput, setShowAdminPasswordInput] = useState(false)
   const [isAdminMode, setIsAdminMode] = useState(false)
   const [newEmployeeData, setNewEmployeeData] = useState({
     dni: '',
     contraseña: '',
-    nombre: ''
+    nombre: '',
+    sucursal: 'jbj' // Valor por defecto
   })
+
   const router = useRouter()
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -32,11 +36,10 @@ export default function Login() {
       if (!isNaN(Number(identifier))) {
         const response = await supabase
           .from('usuarios')
-          .select('id, nombre, dni')
+          .select('id, nombre, dni, sucursal')
           .eq('dni', identifier)
           .eq('contraseña', contraseña)
           .single()
-
         data = response.data
         error = response.error
       } else {
@@ -46,7 +49,6 @@ export default function Login() {
           .eq('usuario', identifier)
           .eq('password', contraseña)
           .single()
-
         data = response.data
         error = response.error
       }
@@ -60,6 +62,7 @@ export default function Login() {
         sessionStorage.setItem('userId', data.id)
         sessionStorage.setItem('nombre', data.nombre)
         sessionStorage.setItem('dni', data.dni)
+        sessionStorage.setItem('sucursal', data.sucursal || '')
         sessionStorage.setItem('userType', 'empleado')
         router.push('/employee')
       } else {
@@ -74,13 +77,10 @@ export default function Login() {
     }
   }
 
-  const handleAdminPasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAdminPassword(e.target.value)
-  }
-
-  const handleToggleAdminMode = () => {
+  const handleAdminPasswordCheck = () => {
     if (adminPassword === 'nico44373') {
       setIsAdminMode(true)
+      setError('')
     } else {
       setError('Contraseña incorrecta')
     }
@@ -88,30 +88,22 @@ export default function Login() {
 
   const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault()
-
     try {
-      const { dni, contraseña, nombre } = newEmployeeData
+      const { dni, contraseña, nombre, sucursal } = newEmployeeData
       const { error } = await supabase
         .from('usuarios')
-        .insert([{ dni, contraseña, nombre }]) // Supabase generará el UUID automáticamente
+        .insert([{ dni, contraseña, nombre, sucursal }])
 
       if (error) {
         setError('Error al agregar el empleado')
         return
       }
 
-      setError('')
       alert('Empleado agregado correctamente')
-
-      // Limpiar el formulario
-      setNewEmployeeData({ dni: '', contraseña: '', nombre: '',  })
-
-      // Cerrar el formulario y volver al login
-      setIsAdminMode(false)
+      setNewEmployeeData({ dni: '', contraseña: '', nombre: '', sucursal: 'jbj' })
       setAdminPassword('')
-
-
-      // Redirigir a la página de login
+      setIsAdminMode(false)
+      setShowAdminPasswordInput(false)
       router.push('/login')
     } catch {
       setError('Error al agregar el empleado')
@@ -119,7 +111,84 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 relative">
+      {/* Configuración arriba a la derecha */}
+      <div className="absolute top-4 right-4">
+        <button
+          onClick={() => setShowAdminPasswordInput(!showAdminPasswordInput)}
+          className="text-gray-600 text-2xl hover:text-gray-800"
+          title="Configuración"
+        >
+          ⚙️
+        </button>
+
+        {showAdminPasswordInput && !isAdminMode && (
+          <div className="mt-2 bg-white border rounded shadow p-4 w-64">
+            <input
+              type="password"
+              value={adminPassword}
+              onChange={(e) => setAdminPassword(e.target.value)}
+              className="w-full border border-gray-300 rounded-md p-2 mb-2"
+              placeholder="Contraseña admin"
+            />
+            <button
+              onClick={handleAdminPasswordCheck}
+              className="w-full bg-green-600 text-white py-1 rounded hover:bg-green-700"
+            >
+              Acceder
+            </button>
+          </div>
+        )}
+
+        {isAdminMode && (
+          <form onSubmit={handleAddEmployee} className="mt-2 bg-white border rounded shadow p-4 w-64 space-y-3">
+            <h3 className="text-md font-semibold text-gray-700">Agregar Empleado</h3>
+            <input
+              type="text"
+              placeholder="DNI"
+              required
+              value={newEmployeeData.dni}
+              onChange={(e) => setNewEmployeeData({ ...newEmployeeData, dni: e.target.value })}
+              className="w-full border border-gray-300 rounded-md p-2"
+            />
+            <input
+              type="password"
+              placeholder="Contraseña"
+              required
+              value={newEmployeeData.contraseña}
+              onChange={(e) => setNewEmployeeData({ ...newEmployeeData, contraseña: e.target.value })}
+              className="w-full border border-gray-300 rounded-md p-2"
+            />
+            <input
+              type="text"
+              placeholder="Nombre"
+              required
+              value={newEmployeeData.nombre}
+              onChange={(e) => setNewEmployeeData({ ...newEmployeeData, nombre: e.target.value })}
+              className="w-full border border-gray-300 rounded-md p-2"
+            />
+            <div className="w-full">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Sucursal</label>
+              <select
+                value={newEmployeeData.sucursal}
+                onChange={(e) => setNewEmployeeData({ ...newEmployeeData, sucursal: e.target.value })}
+                className="w-full border border-gray-300 rounded-md p-2"
+              >
+                <option value="jbj">JBJ</option>
+                <option value="juramento">Juramento</option>
+              </select>
+            </div>
+            <button
+              type="submit"
+              className="w-full bg-blue-600 text-white py-1 rounded hover:bg-blue-700"
+            >
+              Agregar
+            </button>
+          </form>
+        )}
+      </div>
+
+      {/* Formulario principal de login */}
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
         <div className="text-center">
           <h2 className="text-3xl text-gray-700 font-bold">Iniciar Sesión</h2>
@@ -136,9 +205,7 @@ export default function Login() {
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              DNI o Nombre
-            </label>
+            <label className="block text-sm font-medium text-gray-700">DNI o Nombre</label>
             <input
               type="text"
               required
@@ -149,9 +216,7 @@ export default function Login() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Contraseña
-            </label>
+            <label className="block text-sm font-medium text-gray-700">Contraseña</label>
             <input
               type="password"
               required
@@ -163,74 +228,11 @@ export default function Login() {
           </div>
           <button
             type="submit"
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
           >
             Iniciar Sesión
           </button>
         </form>
-
-        {/* Botón para activar el modo de administración */}
-        <div className="mt-4">
-          <input
-            type="password"
-            value={adminPassword}
-            onChange={handleAdminPasswordChange}
-            className="block w-full border border-gray-300 rounded-md shadow-sm p-2"
-            placeholder="Ingrese la contraseña de administrador"
-          />
-          <button
-            onClick={handleToggleAdminMode}
-            className="mt-2 w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-          >
-            Activar Agregar Empleado
-          </button>
-        </div>
-
-        {/* Formulario para agregar empleado */}
-        {isAdminMode && (
-          <form onSubmit={handleAddEmployee} className="mt-6 space-y-6">
-            <h3 className="text-lg font-medium text-gray-700">Agregar Empleado</h3>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">DNI</label>
-              <input
-                type="text"
-                value={newEmployeeData.dni}
-                onChange={(e) => setNewEmployeeData({ ...newEmployeeData, dni: e.target.value })}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                placeholder="DNI del empleado"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Contraseña</label>
-              <input
-                type="password"
-                value={newEmployeeData.contraseña}
-                onChange={(e) => setNewEmployeeData({ ...newEmployeeData, contraseña: e.target.value })}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                placeholder="Contraseña del empleado"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Nombre</label>
-              <input
-                type="text"
-                value={newEmployeeData.nombre}
-                onChange={(e) => setNewEmployeeData({ ...newEmployeeData, nombre: e.target.value })}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                placeholder="Nombre del empleado"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              Agregar Empleado
-            </button>
-          </form>
-        )}
       </div>
     </div>
   )

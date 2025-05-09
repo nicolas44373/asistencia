@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 import { supabase } from '../lib/supabaseClient'
-import { Printer, FileSpreadsheet, User } from 'lucide-react'
+import { Printer, FileSpreadsheet, User, Filter } from 'lucide-react'
 import * as XLSX from 'xlsx';
 
 interface AttendanceRecord {
@@ -25,14 +25,50 @@ interface MonthlyAttendanceRecord extends AttendanceRecord {
 const AttendanceTable = ({
   records,
   formatDateTime,
+  filterEmployee,
 }: {
   records: AttendanceRecord[],
   formatDateTime: (timestamp: string | null) => string,
+  filterEmployee: string,
 }) => {
 
-  const getStatusColor = (time: string | null | undefined) => {
-    if (!time) return 'bg-gray-100'
-    return 'bg-green-100'
+  // Filtramos los registros según el empleado seleccionado
+  const filteredRecords = filterEmployee === 'todos' 
+    ? records 
+    : records.filter(record => record.usuario_id === filterEmployee);
+
+  const getStatusColor = (time: string | null | undefined, isMorning: boolean, isIngreso: boolean) => {
+    if (!time) return 'bg-gray-100';
+    
+    const timeDate = new Date(time);
+    const hours = timeDate.getHours();
+    const minutes = timeDate.getMinutes();
+    const totalMinutes = hours * 60 + minutes;
+    
+    // Lógica para colorear según horarios
+    if (isMorning) {
+      // Reglas para el turno mañana
+      if (isIngreso) {
+        // Para ingreso mañana
+        if (totalMinutes > 8 * 60 + 15) return 'bg-red-100'; // Después de 8:15 AM en rojo (tarde)
+      } else {
+        // Para egreso mañana
+        if (totalMinutes < 13 * 60 + 30) return 'bg-yellow-100'; // Antes de 13:30 en amarillo (salida temprana)
+        if (totalMinutes > 13 * 60 + 40) return 'bg-blue-100'; // Después de 13:40 en azul (horas extras)
+      }
+    } else {
+      // Reglas para el turno tarde
+      if (isIngreso) {
+        // Para ingreso tarde
+        if (totalMinutes > 17 * 60 + 15) return 'bg-red-100'; // Después de 17:15 PM en rojo (tarde)
+      } else {
+        // Para egreso tarde
+        if (totalMinutes < 21 * 60) return 'bg-yellow-100'; // Antes de 21:00 en amarillo (salida temprana)
+        if (totalMinutes > 21 * 60 + 10) return 'bg-blue-100'; // Después de 21:10 en azul (horas extras)
+      }
+    }
+    
+    return 'bg-green-100'; // Horario normal en verde
   }
 
   return (
@@ -62,21 +98,21 @@ const AttendanceTable = ({
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {records.map((record) => (
+          {filteredRecords.map((record) => (
             <tr key={record.usuario_id}>
               <td className="px-6 py-4 whitespace-nowrap font-medium">
                 {record.nombre}
               </td>
-              <td className={`px-6 py-4 whitespace-nowrap ${getStatusColor(record.turno_mañana?.ingreso)}`}>
+              <td className={`px-6 py-4 whitespace-nowrap ${getStatusColor(record.turno_mañana?.ingreso, true, true)}`}>
                 {formatDateTime(record.turno_mañana?.ingreso || null)}
               </td>
-              <td className={`px-6 py-4 whitespace-nowrap ${getStatusColor(record.turno_mañana?.egreso)}`}>
+              <td className={`px-6 py-4 whitespace-nowrap ${getStatusColor(record.turno_mañana?.egreso, true, false)}`}>
                 {formatDateTime(record.turno_mañana?.egreso || null)}
               </td>
-              <td className={`px-6 py-4 whitespace-nowrap ${getStatusColor(record.turno_tarde?.ingreso)}`}>
+              <td className={`px-6 py-4 whitespace-nowrap ${getStatusColor(record.turno_tarde?.ingreso, false, true)}`}>
                 {formatDateTime(record.turno_tarde?.ingreso || null)}
               </td>
-              <td className={`px-6 py-4 whitespace-nowrap ${getStatusColor(record.turno_tarde?.egreso)}`}>
+              <td className={`px-6 py-4 whitespace-nowrap ${getStatusColor(record.turno_tarde?.egreso, false, false)}`}>
                 {formatDateTime(record.turno_tarde?.egreso || null)}
               </td>
             </tr>
@@ -87,19 +123,24 @@ const AttendanceTable = ({
   )
 }
 
-const AttendanceStats = ({ records }: { records: AttendanceRecord[] }) => {
+const AttendanceStats = ({ records, filterEmployee }: { records: AttendanceRecord[], filterEmployee: string }) => {
+  // Filtramos los registros según el empleado seleccionado
+  const filteredRecords = filterEmployee === 'todos' 
+    ? records 
+    : records.filter(record => record.usuario_id === filterEmployee);
+
   const stats = {
-    total: records.length,
-    morning: records.filter(r => r.turno_mañana?.ingreso).length,
-    afternoon: records.filter(r => r.turno_tarde?.ingreso).length
+    total: filteredRecords.length,
+    morning: filteredRecords.filter(r => r.turno_mañana?.ingreso).length,
+    afternoon: filteredRecords.filter(r => r.turno_tarde?.ingreso).length
   }
 
   return (
     <div className="grid grid-cols-3 gap-4 mb-6">
       {[ 
         { label: 'Total Empleados', value: stats.total },
-        { label: 'Asistencia Mañana', value: `${stats.morning} (${Math.round(stats.morning/stats.total * 100)}%)` },
-        { label: 'Asistencia Tarde', value: `${stats.afternoon} (${Math.round(stats.afternoon/stats.total * 100)}%)` }
+        { label: 'Asistencia Mañana', value: `${stats.morning} (${stats.total > 0 ? Math.round(stats.morning/stats.total * 100) : 0}%)` },
+        { label: 'Asistencia Tarde', value: `${stats.afternoon} (${stats.total > 0 ? Math.round(stats.afternoon/stats.total * 100) : 0}%)` }
       ].map((stat, index) => (
         <div key={index} className="bg-white p-6 rounded-lg shadow">
           <div className="text-2xl font-bold">{stat.value}</div>
@@ -117,6 +158,7 @@ export default function Admin() {
   const [error, setError] = useState<string | null>(null)
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
   const [selectedEmployee, setSelectedEmployee] = useState<string>('todos')
+  const [tableFilterEmployee, setTableFilterEmployee] = useState<string>('todos')
   const router = useRouter()
   
   useEffect(() => {
@@ -391,7 +433,7 @@ export default function Admin() {
             </div>
           )}
 
-          <AttendanceStats records={attendanceRecords} />
+          <AttendanceStats records={attendanceRecords} filterEmployee={tableFilterEmployee} />
 
           {/* Sección de exportación individual */}
           <div className="bg-gray-50 p-4 mb-6 rounded-lg border">
@@ -434,9 +476,49 @@ export default function Admin() {
             </div>
           </div>
 
+          {/* Filtro para la tabla */}
+          <div className="bg-gray-50 p-4 mb-6 rounded-lg border">
+            <h2 className="text-lg font-semibold mb-4">Filtrar Tabla</h2>
+            <div className="flex gap-4 items-center">
+              <div className="flex-grow">
+                <select
+                  value={tableFilterEmployee}
+                  onChange={(e) => setTableFilterEmployee(e.target.value)}
+                  className="w-full border rounded-md p-2"
+                >
+                  <option value="todos">Ver todos los empleados</option>
+                  {uniqueEmployees.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="px-4 py-2 bg-white border rounded-md">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-green-100"></div>
+                  <span>A tiempo</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-red-100"></div>
+                  <span>Ingreso tarde (8:15 / 17:15)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-yellow-100"></div>
+                  <span>Egreso temprano (13:30 / 21:00)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-blue-100"></div>
+                  <span>Horas extras (13:40 / 21:10)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <AttendanceTable
             records={attendanceRecords}
             formatDateTime={formatDateTime}
+            filterEmployee={tableFilterEmployee}
           />
         </div>
       </div>
