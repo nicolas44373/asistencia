@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 import { supabase } from '../lib/supabaseClient'
-import { Printer, FileSpreadsheet, User, Filter } from 'lucide-react'
+import { Printer, FileSpreadsheet, User } from 'lucide-react'
 import * as XLSX from 'xlsx';
 
 interface AttendanceRecord {
