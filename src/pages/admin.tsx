@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 import { supabase } from '../lib/supabaseClient'
-import { Printer, FileSpreadsheet, User } from 'lucide-react'
+import { Printer, FileSpreadsheet, User, Calendar } from 'lucide-react'
 import * as XLSX from 'xlsx';
 
 interface AttendanceRecord {
@@ -71,6 +71,19 @@ const AttendanceTable = ({
     return 'bg-green-100'; // Horario normal en verde
   }
 
+  const formatDate = (dateString: string) => {
+    // Ajuste para zona horaria de Argentina (GMT-3)
+    const date = new Date(dateString);
+    // Establecer hora para evitar problemas de zona horaria
+    date.setHours(15, 0, 0, 0); // 15:00 UTC = 12:00 en Argentina GMT-3
+    return date.toLocaleDateString('es-AR', {
+      day: '2-digit', 
+      month: '2-digit',
+      year: 'numeric',
+      timeZone: 'America/Argentina/Buenos_Aires'
+    });
+  };
+
   return (
     <div className="overflow-x-auto rounded-lg border">
       <table className="min-w-full divide-y divide-gray-200">
@@ -78,6 +91,9 @@ const AttendanceTable = ({
           <tr>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Empleado
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Fecha
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" colSpan={2}>
               Turno Mañana
@@ -90,6 +106,9 @@ const AttendanceTable = ({
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Nombre
             </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Día
+            </th>
             {['Ingreso', 'Egreso', 'Ingreso', 'Egreso'].map((header, index) => (
               <th key={index} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 {header}
@@ -99,9 +118,12 @@ const AttendanceTable = ({
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
           {filteredRecords.map((record) => (
-            <tr key={record.usuario_id}>
+            <tr key={`${record.usuario_id}-${record.fecha}`}>
               <td className="px-6 py-4 whitespace-nowrap font-medium">
                 {record.nombre}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-center">
+                {formatDate(record.fecha)}
               </td>
               <td className={`px-6 py-4 whitespace-nowrap ${getStatusColor(record.turno_mañana?.ingreso, true, true)}`}>
                 {formatDateTime(record.turno_mañana?.ingreso || null)}
@@ -138,7 +160,7 @@ const AttendanceStats = ({ records, filterEmployee }: { records: AttendanceRecor
   return (
     <div className="grid grid-cols-3 gap-4 mb-6">
       {[ 
-        { label: 'Total Empleados', value: stats.total },
+        { label: 'Total Registros', value: stats.total },
         { label: 'Asistencia Mañana', value: `${stats.morning} (${stats.total > 0 ? Math.round(stats.morning/stats.total * 100) : 0}%)` },
         { label: 'Asistencia Tarde', value: `${stats.afternoon} (${stats.total > 0 ? Math.round(stats.afternoon/stats.total * 100) : 0}%)` }
       ].map((stat, index) => (
@@ -154,9 +176,29 @@ const AttendanceStats = ({ records, filterEmployee }: { records: AttendanceRecor
 export default function Admin() {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([])
   const [monthlyRecords, setMonthlyRecords] = useState<MonthlyAttendanceRecord[]>([])
-  const [, setLoading] = useState(true)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
+  
+  // Configuración de fechas
+  const today = new Date();
+  
+  // Ajustar a zona horaria de Argentina (GMT-3)
+  const argentinaOffset = -3 * 60;
+  const currentOffsetMinutes = today.getTimezoneOffset();
+  const offsetDifference = currentOffsetMinutes - argentinaOffset;
+  const argentinaDate = new Date(today.getTime() + offsetDifference * 60 * 1000);
+  
+  const [startDate, setStartDate] = useState(() => {
+    // Por defecto, primer día del mes actual
+    const firstDay = new Date(argentinaDate.getFullYear(), argentinaDate.getMonth(), 1);
+    return firstDay.toISOString().split('T')[0];
+  });
+  
+  const [endDate, setEndDate] = useState(() => {
+    // Por defecto, fecha actual de Argentina
+    return argentinaDate.toISOString().split('T')[0];
+  });
+
   const [selectedEmployee, setSelectedEmployee] = useState<string>('todos')
   const [tableFilterEmployee, setTableFilterEmployee] = useState<string>('todos')
   const router = useRouter()
@@ -172,18 +214,42 @@ export default function Admin() {
         return
       }
 
-      fetchAttendanceRecords(selectedDate)
-      fetchMonthlyRecords(selectedDate)
+      fetchAttendanceRecordsDateRange(startDate, endDate)
     }
 
     checkAdmin()
-  }, [selectedDate, router])
+  }, [startDate, endDate, router])
 
-  const fetchMonthlyRecords = async (date: string) => {
+  const getDatesInRange = (start: string, end: string) => {
+    const dates = [];
+    
+    // Crear fechas con zona horaria de Argentina
+    // Usar hora 15:00 UTC (12:00 en Argentina) para evitar problemas de zona horaria
+    const startDate = new Date(`${start}T15:00:00Z`);
+    const endDate = new Date(`${end}T15:00:00Z`);
+    
+    // Clonar la fecha inicial
+    const currentDate = new Date(startDate);
+    
+    // Iterar mientras la fecha actual sea menor o igual a la fecha final
+    while (currentDate <= endDate) {
+      // Extraer solo YYYY-MM-DD y agregar a las fechas
+      const year = currentDate.getFullYear();
+      const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+      const day = String(currentDate.getDate()).padStart(2, '0');
+      dates.push(`${year}-${month}-${day}`);
+      
+      // Incrementar la fecha actual en 1 día
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    return dates;
+  };
+
+  const fetchAttendanceRecordsDateRange = async (start: string, end: string) => {
     try {
-      const startDate = new Date(date);
-      startDate.setDate(1); 
-      const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0); 
+      setLoading(true);
+      setError(null);
 
       const { data: usuarios, error: userError } = await supabase
         .from('usuarios')
@@ -192,122 +258,107 @@ export default function Admin() {
 
       if (userError) throw userError;
 
-      const monthDates = Array.from(
-        { length: endDate.getDate() }, 
-        (_, i) => new Date(startDate.getFullYear(), startDate.getMonth(), i + 1)
-      );
+      // Get all dates in the range
+      const dateRange = getDatesInRange(start, end);
+      const allRecords: AttendanceRecord[] = [];
+      const allMonthlyRecords: MonthlyAttendanceRecord[] = [];
 
-      const monthlyData: MonthlyAttendanceRecord[] = [];
-
-      for (const currentDate of monthDates) {
-        const dateStr = currentDate.toISOString().split('T')[0];
-
+      // Fetch data for each date in the range
+      for (const date of dateRange) {
         const [mañanaResult, tardeResult] = await Promise.all([
-          supabase.from('asistencia_mañana').select('*').eq('fecha', dateStr),
-          supabase.from('asistencia_tarde').select('*').eq('fecha', dateStr)
+          supabase.from('asistencia_mañana').select('*').eq('fecha', date),
+          supabase.from('asistencia_tarde').select('*').eq('fecha', date)
         ]);
 
         if (mañanaResult.error) throw mañanaResult.error;
         if (tardeResult.error) throw tardeResult.error;
 
-        usuarios.forEach(usuario => {
+        // Add all users for this date
+        usuarios?.forEach(usuario => {
           const mañana = mañanaResult.data?.find(r => r.usuario_id === usuario.id);
           const tarde = tardeResult.data?.find(r => r.usuario_id === usuario.id);
-
-          monthlyData.push({
-            fecha: dateStr,
-            nombre: usuario.nombre,
-            usuario_id: usuario.id,
-            day: currentDate.getDate(),
-            turno_mañana: mañana ? {
-              ingreso: mañana.ingreso,
-              egreso: mañana.egreso
-            } : undefined,
-            turno_tarde: tarde ? {
-              ingreso: tarde.ingreso,
-              egreso: tarde.egreso
-            } : undefined
-          });
+          
+          // Only add records with some attendance data
+          if (mañana?.ingreso || mañana?.egreso || tarde?.ingreso || tarde?.egreso) {
+            const record = {
+              fecha: date,
+              nombre: usuario.nombre,
+              usuario_id: usuario.id,
+              turno_mañana: mañana ? {
+                ingreso: mañana.ingreso,
+                egreso: mañana.egreso
+              } : undefined,
+              turno_tarde: tarde ? {
+                ingreso: tarde.ingreso,
+                egreso: tarde.egreso
+              } : undefined
+            };
+            
+            allRecords.push(record);
+            
+            // Add to monthly records with day info
+            // Usar la zona horaria de Argentina para calcular el día
+            const dateWithZone = new Date(`${date}T15:00:00Z`); // 15:00 UTC = 12:00 en Argentina GMT-3
+            const recordDay = dateWithZone.getDate();
+            
+            allMonthlyRecords.push({
+              ...record,
+              day: recordDay
+            });
+          }
         });
       }
 
-      setMonthlyRecords(monthlyData);
+      // Sort records by date and name
+      allRecords.sort((a, b) => {
+        if (a.fecha === b.fecha) {
+          return a.nombre.localeCompare(b.nombre);
+        }
+        return a.fecha.localeCompare(b.fecha);
+      });
 
+      setAttendanceRecords(allRecords);
+      setMonthlyRecords(allMonthlyRecords);
     } catch (error) {
-      console.error('Error al cargar los registros mensuales:', error);
-      setError('Error al cargar los registros mensuales.');
+      console.error('Error al cargar los registros:', error);
+      setError('Error al cargar los registros de asistencia.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const fetchAttendanceRecords = async (date: string) => {
-    try {
-      setLoading(true)
-      setError(null)
-
-      const { data: usuarios, error: userError } = await supabase
-        .from('usuarios')
-        .select('id, nombre')
-        .order('nombre')
-
-      if (userError) throw userError
-
-      const [mañanaResult, tardeResult] = await Promise.all([
-        supabase.from('asistencia_mañana').select('*').eq('fecha', date),
-        supabase.from('asistencia_tarde').select('*').eq('fecha', date)
-      ])
-
-      if (mañanaResult.error) throw mañanaResult.error
-      if (tardeResult.error) throw tardeResult.error
-
-      const registrosCombinados = usuarios?.map(usuario => ({
-        fecha: date,
-        nombre: usuario.nombre,
-        usuario_id: usuario.id,
-        turno_mañana: mañanaResult.data?.find(r => r.usuario_id === usuario.id),
-        turno_tarde: tardeResult.data?.find(r => r.usuario_id === usuario.id)
-      }))
-
-      setAttendanceRecords(registrosCombinados || [])
-    } catch (error) {
-      console.error('Error al cargar los registros:', error)
-      setError('Error al cargar los registros de asistencia.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const formatDateTime = (timestamp: string | null) => {
-    if (!timestamp) return 'No registrado'
+    if (!timestamp) return 'No registrado';
+    
+    // Asegurar que usamos la zona horaria de Argentina
     return new Date(timestamp).toLocaleString('es-AR', {
       timeZone: 'America/Argentina/Buenos_Aires',
       hour: '2-digit',
       minute: '2-digit',
       hour12: false
-    })
-  }
+    });
+  };
 
   // Obtener lista única de empleados para el selector
-  const uniqueEmployees = monthlyRecords
-    .map(r => ({ id: r.usuario_id, nombre: r.nombre }))
-    .filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
+  const uniqueEmployees = Array.from(
+    new Map(monthlyRecords.map(r => [r.usuario_id, { id: r.usuario_id, nombre: r.nombre }])).values()
+  );
 
   const exportToExcel = (
-    monthlyRecords: MonthlyAttendanceRecord[],
-    selectedDate: string,
+    records: MonthlyAttendanceRecord[],
+    startDate: string,
+    endDate: string,
     formatDateTime: (date: string | null) => string,
     employeeId?: string
   ) => {
-    const date = new Date(selectedDate);
-    const monthName = date.toLocaleString('es-AR', {
-      month: 'long',
-      year: 'numeric',
-      timeZone: 'America/Argentina/Buenos_Aires'
-    });
+    // Usar zona horaria de Argentina para las fechas
+    const startDateObj = new Date(`${startDate}T15:00:00Z`); // 15:00 UTC = 12:00 en Argentina GMT-3
+    const endDateObj = new Date(`${endDate}T15:00:00Z`);
+    
+    const dateRange = `${startDateObj.toLocaleDateString('es-AR', {timeZone: 'America/Argentina/Buenos_Aires'})} al ${endDateObj.toLocaleDateString('es-AR', {timeZone: 'America/Argentina/Buenos_Aires'})}`;
   
-    const filteredRecords = monthlyRecords.filter(record =>
-      (!employeeId || employeeId === 'todos' || record.usuario_id === employeeId) &&
-      ((record.turno_mañana?.ingreso || record.turno_mañana?.egreso) ||
-       (record.turno_tarde?.ingreso || record.turno_tarde?.egreso))
+    const filteredRecords = records.filter(record =>
+      (!employeeId || employeeId === 'todos' || record.usuario_id === employeeId)
     );
   
     if (filteredRecords.length === 0) {
@@ -334,9 +385,13 @@ export default function Admin() {
         ingresoTarde = `Tarde: ${ingresoTarde}`;
       }
   
+      // Usar zona horaria de Argentina para formatear la fecha
+      const recordDate = new Date(`${record.fecha}T15:00:00Z`); // 15:00 UTC = 12:00 en Argentina GMT-3
+      const formattedDate = recordDate.toLocaleDateString('es-AR', {timeZone: 'America/Argentina/Buenos_Aires'});
+  
       return {
         Empleado: record.nombre,
-        Día: record.day,
+        Fecha: formattedDate,
         "Ingreso Mañana": ingresoMañana,
         "Egreso Mañana": record.turno_mañana?.egreso ? formatDateTime(record.turno_mañana.egreso) : "No registrado",
         "Ingreso Tarde": ingresoTarde,
@@ -346,7 +401,7 @@ export default function Admin() {
   
     formattedRecords.sort((a, b) => {
       if (a.Empleado === b.Empleado) {
-        return a.Día - b.Día;
+        return a.Fecha.localeCompare(b.Fecha);
       }
       return a.Empleado.localeCompare(b.Empleado);
     });
@@ -359,14 +414,14 @@ export default function Admin() {
     const worksheet = XLSX.utils.json_to_sheet(formattedRecords);
     worksheet["!cols"] = [
       { wch: 25 }, // Empleado  
-      { wch: 10 }, // Día
+      { wch: 15 }, // Fecha
       { wch: 20 }, // Ingreso Mañana
       { wch: 20 }, // Egreso Mañana
       { wch: 20 }, // Ingreso Tarde
       { wch: 20 }  // Egreso Tarde
     ];
     XLSX.utils.book_append_sheet(workbook, worksheet, "Asistencia");
-    XLSX.writeFile(workbook, `Asistencia_${nombreEmpleado}_${monthName}.xlsx`);
+    XLSX.writeFile(workbook, `Asistencia_${nombreEmpleado}_${dateRange.replace(/\//g, '-')}.xlsx`);
   };
 
   // Función para exportar todos los empleados individualmente
@@ -379,13 +434,11 @@ export default function Admin() {
     let countExported = 0;
     uniqueEmployees.forEach(employee => {
       const filteredRecords = monthlyRecords.filter(
-        record => record.usuario_id === employee.id &&
-        ((record.turno_mañana?.ingreso || record.turno_mañana?.egreso) ||
-         (record.turno_tarde?.ingreso || record.turno_tarde?.egreso))
+        record => record.usuario_id === employee.id
       );
 
       if (filteredRecords.length > 0) {
-        exportToExcel(monthlyRecords, selectedDate, formatDateTime, employee.id);
+        exportToExcel(monthlyRecords, startDate, endDate, formatDateTime, employee.id);
         countExported++;
       }
     });
@@ -404,14 +457,8 @@ export default function Admin() {
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold">Panel de Administrador</h1>
             <div className="flex gap-4 items-center print:hidden">
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="border rounded-md p-2"
-              />
               <button
-                onClick={() => exportToExcel(monthlyRecords, selectedDate, formatDateTime)}
+                onClick={() => exportToExcel(monthlyRecords, startDate, endDate, formatDateTime)}
                 className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
               >
                 <FileSpreadsheet className="h-4 w-4" />
@@ -432,6 +479,41 @@ export default function Admin() {
               {error}
             </div>
           )}
+
+          {/* Selección de Rango de Fechas */}
+          <div className="bg-blue-50 p-4 mb-6 rounded-lg border border-blue-200">
+            <h2 className="text-lg font-semibold mb-4 flex items-center">
+              <Calendar className="h-5 w-5 mr-2" />
+              Selección de Rango de Fechas
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block mb-2 text-sm font-medium">Desde:</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full border rounded-md p-2"
+                  max={endDate} // No permite seleccionar después de la fecha final
+                />
+              </div>
+              <div>
+                <label className="block mb-2 text-sm font-medium">Hasta:</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full border rounded-md p-2"
+                  min={startDate} // No permite seleccionar antes de la fecha inicial
+                />
+              </div>
+            </div>
+            {loading && (
+              <div className="mt-4 text-blue-600">
+                Cargando registros...
+              </div>
+            )}
+          </div>
 
           <AttendanceStats records={attendanceRecords} filterEmployee={tableFilterEmployee} />
 
@@ -461,11 +543,11 @@ export default function Admin() {
                       exportAllEmployeesIndividually();
                     } else {
                       // Exportar un solo archivo con todos los empleados
-                      exportToExcel(monthlyRecords, selectedDate, formatDateTime);
+                      exportToExcel(monthlyRecords, startDate, endDate, formatDateTime);
                     }
                   } else {
                     // Exportar solo el empleado seleccionado
-                    exportToExcel(monthlyRecords, selectedDate, formatDateTime, selectedEmployee);
+                    exportToExcel(monthlyRecords, startDate, endDate, formatDateTime, selectedEmployee);
                   }
                 }}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
@@ -515,11 +597,17 @@ export default function Admin() {
             </div>
           </div>
 
-          <AttendanceTable
-            records={attendanceRecords}
-            formatDateTime={formatDateTime}
-            filterEmployee={tableFilterEmployee}
-          />
+          {attendanceRecords.length > 0 ? (
+            <AttendanceTable
+              records={attendanceRecords}
+              formatDateTime={formatDateTime}
+              filterEmployee={tableFilterEmployee}
+            />
+          ) : !loading && (
+            <div className="bg-gray-50 p-6 text-center border rounded-lg">
+              No hay registros de asistencia en el rango de fechas seleccionado.
+            </div>
+          )}
         </div>
       </div>
     </div>

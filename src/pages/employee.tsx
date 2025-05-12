@@ -98,30 +98,70 @@ export default function Employee() {
         throw errorSelect;
       }
 
-      const updateData: { usuario_id: string; fecha: string; ingreso?: Date | null; egreso?: Date | null } = {
-        usuario_id: userId,
-        fecha: fechaActual
-      };
-
+      // CÓDIGO CORREGIDO AQUÍ:
+      // Manejar el caso de registrar egreso sin ingreso previo (permitiendo este caso)
       if (!registroExistente) {
-        updateData.ingreso = timestamp;
-        updateData.egreso = null;
-      } else if (registroExistente.ingreso && !registroExistente.egreso && tipoEvento === "egreso") {
-        updateData.egreso = timestamp;
-      } else {
-        if (registroExistente.egreso) {
-          alert('Ya se registraron ingreso y egreso para hoy.');
-        } else if (tipoEvento === "ingreso") {
-          alert('Ya se registró el ingreso para hoy.');
+        // Si no hay registro previo
+        if (tipoEvento === "egreso") {
+          // Permitir registrar egreso sin ingreso previo
+          // Crear un registro con solo el egreso registrado
+          const { error } = await supabase
+            .from(tablaAsistencia)
+            .insert([{
+              usuario_id: userId,
+              fecha: fechaActual,
+              ingreso: null,
+              egreso: timestamp
+            }]);
+            
+          if (error) throw error;
+        } else {
+          // Si es ingreso y no hay registro previo, crear nuevo registro
+          const { error } = await supabase
+            .from(tablaAsistencia)
+            .insert([{
+              usuario_id: userId,
+              fecha: fechaActual,
+              ingreso: timestamp,
+              egreso: null
+            }]);
+            
+          if (error) throw error;
         }
-        return;
+      } else {
+        // Si ya existe un registro para hoy
+        if (tipoEvento === "ingreso") {
+          // Si ya hay un ingreso registrado
+          if (registroExistente.ingreso) {
+            alert('Ya se registró el ingreso para hoy.');
+            return;
+          } else {
+            // Actualizar el ingreso (caso poco común pero posible)
+            const { error } = await supabase
+              .from(tablaAsistencia)
+              .update({ ingreso: timestamp })
+              .eq('usuario_id', userId)
+              .eq('fecha', fechaActual);
+              
+            if (error) throw error;
+          }
+        } else if (tipoEvento === "egreso") {
+          // Si ya hay un egreso registrado
+          if (registroExistente.egreso) {
+            alert('Ya se registró el egreso para hoy.');
+            return;
+          } else {
+            // Actualizar el egreso
+            const { error } = await supabase
+              .from(tablaAsistencia)
+              .update({ egreso: timestamp })
+              .eq('usuario_id', userId)
+              .eq('fecha', fechaActual);
+              
+            if (error) throw error;
+          }
+        }
       }
-
-      const { error } = await supabase
-        .from(tablaAsistencia)
-        .upsert([updateData], { onConflict: 'usuario_id,fecha' });
-
-      if (error) throw error;
 
       alert(`${tipoEvento} registrado con éxito para el turno ${turno}`);
       sessionStorage.clear();
