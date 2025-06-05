@@ -71,18 +71,16 @@ const AttendanceTable = ({
     return 'bg-green-100'; // Horario normal en verde
   }
 
-  const formatDate = (dateString: string) => {
-    // Ajuste para zona horaria de Argentina (GMT-3)
-    const date = new Date(dateString);
-    // Establecer hora para evitar problemas de zona horaria
-    date.setHours(15, 0, 0, 0); // 15:00 UTC = 12:00 en Argentina GMT-3
-    return date.toLocaleDateString('es-AR', {
-      day: '2-digit', 
-      month: '2-digit',
-      year: 'numeric',
-      timeZone: 'America/Argentina/Buenos_Aires'
-    });
-  };
+const formatDate = (dateString: string) => {
+  const [year, month, day] = dateString.split('-').map(Number);
+  const date = new Date(year, month - 1, day); // ← esto crea la fecha como local, sin UTC
+  return date.toLocaleDateString('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+};
+
 
   return (
     <div className="overflow-x-auto rounded-lg border">
