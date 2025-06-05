@@ -81,7 +81,6 @@ const formatDate = (dateString: string) => {
   });
 };
 
-
   return (
     <div className="overflow-x-auto rounded-lg border">
       <table className="min-w-full divide-y divide-gray-200">
